@@ -3,6 +3,7 @@ import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
 import { LayoutDashboard, CalendarRange, ListChecks, Wallet, LogOut, Menu, X, ExternalLink } from 'lucide-react'
 import { site } from '@/config/site'
 import { cn } from '@/lib/cn'
+import { withBase } from '@/lib/base'
 import { Spinner } from '@/components/ui'
 import { useAuth } from './auth'
 import { useBookings } from './queries'
@@ -49,7 +50,7 @@ export function AdminLayout() {
           ))}
         </nav>
         <div className="border-t border-piedra-200 p-3 text-sm">
-          <a href="/" target="_blank" rel="noopener" className="flex items-center gap-3 rounded-lg px-3 py-2 text-ink-soft hover:bg-piedra-100 hover:text-ink">
+          <a href={withBase('/')} target="_blank" rel="noopener" className="flex items-center gap-3 rounded-lg px-3 py-2 text-ink-soft hover:bg-piedra-100 hover:text-ink">
             <ExternalLink className="size-4" aria-hidden />
             Ver web pública
           </a>

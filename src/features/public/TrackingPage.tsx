@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Download, FileUp, Copy } from 'lucide-react'
+import { Check, Download, FileUp, Copy, MapPin } from 'lucide-react'
 import { publicApi } from '@/api/public'
 import { ApiError } from '@/api/client'
-import { documents, site } from '@/config/site'
+import { documents, site, transferConcept } from '@/config/site'
 import { statusMeta, type BookingStatus, type PublicBooking } from '@/domain/booking'
 import { fmtDate, fmtRange, money } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -97,6 +97,10 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
               Llegada el {fmtDate(b.arrivalDate, "EEEE d 'de' MMMM")} a las {b.arrivalTime}. Salida a las {b.departureTime}. Antes de venir te
               contactaremos para la entrega de llaves.
             </p>
+            <a href={site.mapsUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-encina-600 hover:underline">
+              <MapPin className="size-4" aria-hidden />
+              Ver la casa en Google Maps
+            </a>
           </div>
         )}
         {b.status === 'refund' && <p className="leading-relaxed text-ink-soft">Estamos tramitando la devolución. La recibirás por transferencia en la cuenta desde la que pagaste.</p>}
@@ -143,11 +147,14 @@ function PaymentStep({ booking: b, token }: { booking: PublicBooking; token: str
         <h2 className="text-xl font-semibold">Haz la transferencia</h2>
         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
           <Copyable label="Importe" value={money(amount)} big />
-          <Copyable label="Concepto" value={b.reference} />
-          <Copyable label="IBAN" value={site.bankAccount.iban} />
+          <Copyable label="Concepto" value={transferConcept(b.reference, b.organization)} />
+          <Copyable label={`IBAN (${site.bankAccount.bank})`} value={site.bankAccount.iban} />
           <Copyable label="Titular" value={site.bankAccount.holder} />
         </dl>
-        <p className="mt-4 text-xs text-ink-soft">El importe incluye la fianza, que te devolvemos después de la estancia.</p>
+        <p className="mt-4 text-xs text-ink-soft">
+          Escribe el concepto tal cual: la referencia y el nombre del grupo nos permiten identificar el pago. El importe incluye la fianza, que te
+          devolvemos después de la estancia.
+        </p>
       </div>
 
       <form

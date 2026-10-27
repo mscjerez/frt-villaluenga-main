@@ -17,6 +17,7 @@ import { Alert, Button, Field, Input, Textarea } from '@/components/ui'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { PriceSummary } from './PriceSummary'
 import { Captcha, type CaptchaHandle } from './Captcha'
+import { withBase } from '@/lib/base'
 
 const int = (msg: string) => z.number({ error: msg }).int({ error: 'Usa un número entero.' })
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'Indica la hora.' })
@@ -275,7 +276,7 @@ function BookingForm({ onDone }: { onDone: (r: CreateBookingResponse) => void })
             </Consent>
             <Consent id="acceptRules" error={err('acceptRules')} {...register('acceptRules')}>
               He leído y acepto las{' '}
-              <a href="/docs/normas-de-la-casa.pdf" target="_blank" rel="noopener" className="font-medium text-encina-600 underline">
+              <a href={withBase('/docs/normas-de-la-casa.pdf')} target="_blank" rel="noopener" className="font-medium text-encina-600 underline">
                 normas de la casa
               </a>{' '}
               y me hago responsable del grupo durante la estancia.

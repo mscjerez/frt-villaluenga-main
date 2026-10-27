@@ -38,7 +38,7 @@ Scripts: `npm run dev`, `npm run build`, `npm run preview`, `npm run typecheck`,
 ## Qué tienes que personalizar
 
 - `src/config/site.ts`: datos de contacto, IBAN, responsable del tratamiento (RGPD), aforo, precios, textos de FAQ.
-- `public/photos/*.jpg`: fotos reales con los nombres de `site.ts` (si falta una, se muestra un hueco neutro).
+- `public/photos/*.webp`: fotos de la casa (WebP, calidad ~85). Se listan en `site.ts`; si falta una, se muestra un hueco neutro.
 - `public/docs/normas-de-la-casa.pdf` y `public/docs/parte-de-incidencias.pdf`: ahora son documentos de ejemplo.
 - `src/features/public/PrivacyPage.tsx`: texto base de la política de privacidad; revísalo antes de publicar.
 - `.env`: `VITE_TURNSTILE_SITE_KEY` con tu clave real de Turnstile, `VITE_API_MOCK=false` y `VITE_API_URL` si la API va en otro dominio.

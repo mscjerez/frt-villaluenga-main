@@ -30,6 +30,8 @@ function csp(apiUrl: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
+    // GitHub Pages serves project sites under /<repo>/; the deploy workflow sets BASE_PATH.
+    base: env.BASE_PATH || '/',
     plugins: [react(), tailwindcss(), csp(env.VITE_API_URL ?? '')],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     server: { port: 5173 },

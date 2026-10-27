@@ -9,7 +9,7 @@ export function AdminRoot() {
     meta.content = 'noindex, nofollow'
     document.head.appendChild(meta)
     const prev = document.title
-    document.title = 'Gestión · Rincón Cura Carlos'
+    document.title = 'Gestión · Rincón Scout Cura Carlos'
     return () => {
       meta.remove()
       document.title = prev

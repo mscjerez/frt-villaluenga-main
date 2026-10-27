@@ -1,37 +1,47 @@
-import { useState } from 'react'
-import { ChevronDown, Download, FileText, ImageOff, Users, CalendarDays, Mountain } from 'lucide-react'
-import { documents, faq, photos, prices, site } from '@/config/site'
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, Download, FileText, ImageOff, Images, Users, CalendarDays, MapPin } from 'lucide-react'
+import { documents, faq, heroPhotos, photos, prices, site, type Photo as PhotoData } from '@/config/site'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { Dialog } from '@/components/ui'
 import { BookingSection } from './BookingSection'
 
 export function HomePage() {
+  // One lightbox for the whole page: hero photos and the gallery both open it.
+  const [active, setActive] = useState<number | null>(null)
+  const open = (photo: PhotoData) => setActive(photos.indexOf(photo))
   return (
     <>
-      <Hero />
+      <Hero onOpen={open} />
       <Pricing />
       <BookingSection />
-      <Gallery />
+      <Gallery onOpen={open} />
       <Documents />
       <Faq />
+      <Lightbox active={active} setActive={setActive} />
     </>
   )
 }
 
 // ---------- Hero ----------
 
-function Hero() {
+function Hero({ onOpen }: { onOpen: (p: PhotoData) => void }) {
   return (
     <section className="relative overflow-hidden bg-cal">
-      <div className="mx-auto grid max-w-6xl items-end gap-10 px-4 pb-14 pt-10 sm:px-6 md:grid-cols-[1.1fr_1fr] md:pb-20 md:pt-16">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-10 sm:px-6 lg:grid-cols-[1fr_1.1fr] lg:gap-14 lg:pb-20 lg:pt-16">
         <div>
-          <p className="flex items-center gap-2 text-sm font-medium text-encina-600">
-            <Mountain className="size-4" aria-hidden />
+          <a
+            href={site.mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm font-medium text-encina-600 underline-offset-4 hover:underline"
+          >
+            <MapPin className="size-4" aria-hidden />
             {site.place}, {site.province}
-          </p>
+            <span className="text-ink-soft">· Ver en el mapa</span>
+          </a>
           <h1 className="mt-4 text-[clamp(2.9rem,8vw,5.6rem)] font-extrabold leading-[0.92] tracking-[-0.035em] text-encina-700">
-            Rincón
+            Rincón Scout
             <br />
             Cura Carlos
           </h1>
@@ -59,10 +69,21 @@ function Hero() {
             </a>
           </div>
         </div>
-        <div className="grid grid-cols-5 grid-rows-[11rem_8rem] gap-3 sm:grid-rows-[15rem_10rem]">
-          <Photo photo={photos[0]} className="col-span-5 sm:col-span-5" eager />
-          <Photo photo={photos[1]} className="col-span-3" eager />
-          <Photo photo={photos[5]} className="col-span-2" eager />
+
+        {/* Every slot has a fixed 4:3 ratio, the shape of the source photos, so nothing is squashed or over-cropped. */}
+        <div className="space-y-3">
+          <Photo photo={heroPhotos.main} onClick={() => onOpen(heroPhotos.main)} className="aspect-[4/3] w-full rounded-2xl" eager />
+          <div className="grid grid-cols-3 gap-3">
+            <Photo photo={heroPhotos.top} onClick={() => onOpen(heroPhotos.top)} className="aspect-[4/3]" eager />
+            <Photo photo={heroPhotos.bottom} onClick={() => onOpen(heroPhotos.bottom)} className="aspect-[4/3]" eager />
+            <a
+              href="#la-casa"
+              className="flex aspect-[4/3] flex-col items-center justify-center gap-1 rounded-xl bg-encina-700 p-2 text-center text-sm font-medium text-white hover:bg-encina-600"
+            >
+              <Images className="size-5" aria-hidden />
+              Ver las {photos.length} fotos
+            </a>
+          </div>
         </div>
       </div>
       {/* Ochre plinth, as painted at the foot of the whitewashed houses of the village */}
@@ -73,9 +94,7 @@ function Hero() {
 
 // ---------- Photo with graceful fallback ----------
 
-type PhotoData = (typeof photos)[number]
-
-function Photo({ photo, className, eager, onClick }: { photo: PhotoData; className?: string; eager?: boolean; onClick?: () => void }) {
+function Photo({ photo, className, eager, onClick, contain }: { photo: PhotoData; className?: string; eager?: boolean; onClick?: () => void; contain?: boolean }) {
   const [failed, setFailed] = useState(false)
   const Tag = onClick ? 'button' : 'div'
   return (
@@ -96,7 +115,8 @@ function Photo({ photo, className, eager, onClick }: { photo: PhotoData; classNa
           loading={eager ? 'eager' : 'lazy'}
           decoding="async"
           onError={() => setFailed(true)}
-          className={cn('h-full w-full object-cover', onClick && 'transition-transform duration-500 group-hover:scale-[1.03]')}
+          style={contain ? undefined : { objectPosition: photo.position }}
+          className={cn('h-full w-full', contain ? 'object-contain' : 'object-cover', onClick && 'transition-transform duration-500 group-hover:scale-[1.03]')}
         />
       )}
     </Tag>
@@ -150,31 +170,72 @@ function Pricing() {
 
 // ---------- Gallery ----------
 
-function Gallery() {
-  const [active, setActive] = useState<number | null>(null)
-  const current = active !== null ? photos[active] : null
+function Gallery({ onOpen }: { onOpen: (p: PhotoData) => void }) {
   return (
     <section id="la-casa" className="bg-paper py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <h2 className="text-4xl font-bold tracking-tight">La casa</h2>
         <p className="mt-4 max-w-[60ch] leading-relaxed text-ink-soft">
-          Dormitorios con literas, salón comedor para todo el grupo, cocina equipada y patio. A dos pasos de los senderos de la sierra y de la
-          plaza del pueblo.
+          Comedor con chimenea para todo el grupo, cocina equipada, salas amplias en las plantas altas y una terraza sobre los tejados. A dos
+          pasos de los senderos de la sierra y de la plaza del pueblo.
         </p>
-        <div className="mt-10 grid auto-rows-[10rem] grid-cols-2 gap-3 sm:auto-rows-[13rem] md:grid-cols-4">
-          {photos.map((p, i) => (
-            <Photo key={p.src} photo={p} onClick={() => setActive(i)} className={cn(i === 0 && 'col-span-2 row-span-2', i === 3 && 'md:col-span-2')} />
+        <div className="mt-10 grid grid-flow-row-dense auto-rows-[10rem] grid-cols-2 gap-3 sm:auto-rows-[13rem] md:grid-cols-4">
+          {photos.map((p) => (
+            <Photo
+              key={p.src}
+              photo={p}
+              onClick={() => onOpen(p)}
+              className={cn(p.span === 'big' && 'col-span-2 row-span-2', p.span === 'wide' && 'col-span-2')}
+            />
           ))}
         </div>
       </div>
-      <Dialog open={current !== null} onClose={() => setActive(null)} title={current?.caption ?? ''} className="w-[min(64rem,calc(100vw-2rem))]">
-        {current && (
-          <div className="aspect-[3/2] w-full">
-            <Photo photo={current} className="h-full w-full" eager />
-          </div>
-        )}
-      </Dialog>
     </section>
+  )
+}
+
+function Lightbox({ active, setActive }: { active: number | null; setActive: (fn: (i: number | null) => number | null) => void }) {
+  const current = active !== null ? photos[active] : null
+  const step = (d: number) => setActive((i) => (i === null ? i : (i + d + photos.length) % photos.length))
+  const open = active !== null
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') step(1)
+      if (e.key === 'ArrowLeft') step(-1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  return (
+    <Dialog
+      open={open}
+      onClose={() => setActive(() => null)}
+      title={current?.caption ?? ''}
+      description={active !== null ? `${active + 1} de ${photos.length}` : undefined}
+      className="w-[min(64rem,calc(100vw-2rem))]"
+    >
+      {current && (
+        <div>
+          <div className="h-[min(70vh,40rem)] w-full">
+            <Photo photo={current} className="h-full w-full bg-ink" contain eager />
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <p className="text-sm text-ink-soft">{current.alt}</p>
+            <div className="flex shrink-0 gap-2">
+              <button onClick={() => step(-1)} className="rounded-lg p-2 ring-1 ring-inset ring-piedra-300 hover:bg-piedra-100" aria-label="Foto anterior">
+                <ChevronLeft className="size-5" />
+              </button>
+              <button onClick={() => step(1)} className="rounded-lg p-2 ring-1 ring-inset ring-piedra-300 hover:bg-piedra-100" aria-label="Foto siguiente">
+                <ChevronRight className="size-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </Dialog>
   )
 }
 
