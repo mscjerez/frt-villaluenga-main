@@ -61,7 +61,43 @@ export interface Booking extends Omit<BookingRequest, 'acceptPrivacy' | 'acceptR
   refund: { deposit: number; payment: number; reason: string; doneAt: string | null } | null
   depositRetained: number
   internalNotes: string
+  /** Free stay: the group only pays the deposit and the booking generates no income. */
+  free: boolean
+  /** Secret for the tracking link `/reservas/:token` that the backend emails to the group. */
+  trackingToken: string
+  /** Messages from the house to the group, shown on the tracking page. */
+  comments: BookingComment[]
   history: StatusChange[]
+}
+
+export interface BookingComment {
+  id: string
+  at: string
+  by: string
+  text: string
+}
+
+/** Dates the house is closed (maintenance, own use…). Shown as busy on the public calendar. */
+export interface DateBlock {
+  id: string
+  start: string // yyyy-MM-dd, inclusive
+  end: string // yyyy-MM-dd, inclusive
+  reason: string
+  createdBy: string
+  createdAt: string
+}
+
+export type NewDateBlock = Pick<DateBlock, 'start' | 'end' | 'reason'>
+
+/**
+ * A booking an admin enters by hand (agreed by phone, email or in person). Same data as the web form without the consents;
+ * DNI, email and activity may be left empty.
+ */
+export interface ManualBookingRequest extends Omit<BookingRequest, 'acceptPrivacy' | 'acceptRules'> {
+  free: boolean
+  internalNotes: string
+  /** Email the group its tracking link, as for web requests. Requires `email`. */
+  notifyGroup: boolean
 }
 
 /** Public view of a booking, reachable through the secret tracking link. */
@@ -76,7 +112,12 @@ export interface PublicBooking {
   totalGuests: number
   estimatedTotal: number
   amountDue: number | null
-  paymentProofUploaded: boolean
+  free: boolean
+  cancelReason: string | null
+  paymentProof: { fileName: string; uploadedAt: string; verified: boolean } | null
+  /** Status changes, oldest first (no internal notes or admin names). */
+  timeline: { at: string; status: BookingStatus }[]
+  comments: { at: string; text: string }[]
 }
 
 export const statusMeta: Record<BookingStatus, { label: string; short: string; description: string; tone: Tone }> = {

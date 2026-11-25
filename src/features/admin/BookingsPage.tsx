@@ -1,12 +1,13 @@
 import { useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { Search, KeyRound } from 'lucide-react'
+import { Search, KeyRound, Plus } from 'lucide-react'
 import { BOOKING_STATUSES, keysLabel, statusMeta, type BookingStatus } from '@/domain/booking'
 import { fmtDate, fmtRange, money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { Input, Spinner, StatusBadge, Select } from '@/components/ui'
 import { PageHeader } from './AdminLayout'
 import { useBookings } from './queries'
+import { suggestedAmountDue } from '@/lib/pricing'
 
 type Sort = 'arrival_asc' | 'arrival_desc' | 'created_desc'
 
@@ -54,7 +55,16 @@ export function BookingsPage() {
 
   return (
     <>
-      <PageHeader title="Reservas" description="Todas las solicitudes y su estado." />
+      <PageHeader
+        title="Reservas"
+        description="Todas las solicitudes y su estado."
+        actions={
+          <Link to="/admin/reservas/nueva" className="inline-flex h-10 items-center gap-2 rounded-lg bg-encina-600 px-4 text-sm font-medium text-white hover:bg-encina-700">
+            <Plus className="size-4" aria-hidden />
+            Nueva reserva
+          </Link>
+        }
+      />
 
       <div className="-mx-4 mb-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
         <div role="tablist" aria-label="Filtrar por estado" className="flex w-max gap-1 rounded-xl bg-piedra-100 p-1">
@@ -123,7 +133,10 @@ export function BookingsPage() {
                         {b.children} + {b.monitors}
                       </p>
                     </td>
-                    <td className="px-4 py-3 text-right tabular">{money(b.amountPaid ?? b.amountDue ?? b.estimatedTotal)}</td>
+                    <td className="px-4 py-3 text-right tabular">
+                      {money(b.amountPaid ?? b.amountDue ?? suggestedAmountDue(b))}
+                      {b.free && <p className="text-xs text-encina-700">Gratuita</p>}
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={b.status} />
                     </td>
@@ -148,7 +161,10 @@ export function BookingsPage() {
                   <p className="mt-1 text-sm text-ink-soft">{fmtRange(b.arrivalDate, b.departureDate)}</p>
                   <p className="mt-2 flex items-center justify-between text-sm">
                     <span>{b.totalGuests} personas</span>
-                    <span className="tabular">{money(b.amountPaid ?? b.amountDue ?? b.estimatedTotal)}</span>
+                    <span className="tabular">
+                      {b.free && <span className="mr-2 text-xs text-encina-700">Gratuita</span>}
+                      {money(b.amountPaid ?? b.amountDue ?? suggestedAmountDue(b))}
+                    </span>
                   </p>
                 </Link>
               </li>

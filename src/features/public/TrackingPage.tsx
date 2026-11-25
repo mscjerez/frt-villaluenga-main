@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, Navigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Download, FileUp, Copy, MapPin } from 'lucide-react'
+import { Check, Download, FileUp, Copy, MapPin, MessageSquare, FileCheck2, Gift } from 'lucide-react'
 import { publicApi } from '@/api/public'
 import { ApiError } from '@/api/client'
 import { documents, site, transferConcept } from '@/config/site'
 import { statusMeta, type BookingStatus, type PublicBooking } from '@/domain/booking'
-import { fmtDate, fmtRange, money } from '@/lib/format'
+import { fmtDate, fmtDateTime, fmtRange, money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { Alert, Button, Spinner, StatusBadge } from '@/components/ui'
 import { Captcha, type CaptchaHandle } from './Captcha'
@@ -29,14 +29,20 @@ export function TrackingPage() {
               ? 'Comprueba que has copiado el enlace completo del correo.'
               : 'No hemos podido conectar. Inténtalo de nuevo en unos minutos.'}
           </p>
-          <Link to="/" className="mt-6 inline-block font-medium text-encina-600 underline">
-            Volver al inicio
+          <Link to="/mi-reserva" className="mt-6 inline-block font-medium text-encina-600 underline">
+            Buscar con la referencia
           </Link>
         </div>
       )}
       {q.data && <Tracking booking={q.data} token={token} />}
     </div>
   )
+}
+
+/** Old `/reserva/:token` links from earlier emails. */
+export function LegacyTrackingRedirect() {
+  const { token = '' } = useParams()
+  return <Navigate to={`/reservas/${token}`} replace />
 }
 
 const steps: { status: BookingStatus; label: string }[] = [
@@ -48,6 +54,7 @@ const steps: { status: BookingStatus; label: string }[] = [
 
 function Tracking({ booking: b, token }: { booking: PublicBooking; token: string }) {
   const stepIndex = b.status === 'refund' ? 3 : steps.findIndex((s) => s.status === b.status)
+  const reachedAt = (s: BookingStatus) => b.timeline.findLast((t) => t.status === s)?.at
   return (
     <>
       <p className="text-sm text-ink-soft">
@@ -57,12 +64,21 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
       <p className="mt-2 text-lg text-ink-soft">
         {fmtRange(b.arrivalDate, b.departureDate)} · {b.totalGuests} personas
       </p>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <StatusBadge status={b.status} />
+        {b.free && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-encina-50 px-2.5 py-0.5 text-xs font-medium text-encina-700 ring-1 ring-inset ring-encina-600/20">
+            <Gift className="size-3.5" aria-hidden />
+            Estancia gratuita
+          </span>
+        )}
       </div>
 
       {b.status === 'cancelled' ? (
-        <Alert className="mt-8">Esta reserva está cancelada. Si crees que es un error, escríbenos a {site.contactEmail}.</Alert>
+        <Alert className="mt-8">
+          Esta reserva está cancelada.
+          {b.cancelReason && <> Motivo: {b.cancelReason}.</>} Si crees que es un error, escríbenos a {site.contactEmail}.
+        </Alert>
       ) : (
         <ol className="mt-10 grid gap-3 sm:grid-cols-4" aria-label="Progreso de la reserva">
           {steps.map((s, i) => {
@@ -79,6 +95,7 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
                   {done ? <Check className="size-4" aria-hidden /> : i + 1}
                 </span>
                 <p className={cn('mt-3 font-medium', !done && !current && 'text-ink-soft')}>{s.label}</p>
+                {(done || current) && reachedAt(s.status) && <p className="mt-0.5 text-xs text-ink-soft">{fmtDate(reachedAt(s.status)!)}</p>}
               </li>
             )
           })}
@@ -86,6 +103,7 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
       )}
 
       <div className="mt-10 space-y-6">
+        <Comments comments={b.comments} />
         {b.status === 'pending' && (
           <p className="leading-relaxed text-ink-soft">{statusMeta.pending.description} Te escribiremos en cuanto la revisemos, normalmente en pocos días.</p>
         )}
@@ -103,6 +121,7 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
             </a>
           </div>
         )}
+        {b.paymentProof && <ProofReceived proof={b.paymentProof} />}
         {b.status === 'refund' && <p className="leading-relaxed text-ink-soft">Estamos tramitando la devolución. La recibirás por transferencia en la cuenta desde la que pagaste.</p>}
         <div className="flex flex-wrap gap-3">
           {documents.map((d) => (
@@ -114,6 +133,40 @@ function Tracking({ booking: b, token }: { booking: PublicBooking; token: string
         </div>
       </div>
     </>
+  )
+}
+
+function Comments({ comments }: { comments: PublicBooking['comments'] }) {
+  if (comments.length === 0) return null
+  return (
+    <section aria-labelledby="comments-title" className="rounded-2xl border border-piedra-200 bg-paper p-6">
+      <h2 id="comments-title" className="flex items-center gap-2 text-xl font-semibold">
+        <MessageSquare className="size-5 text-encina-600" aria-hidden />
+        Mensajes de la casa
+      </h2>
+      <ol className="mt-4 space-y-4">
+        {[...comments].reverse().map((c, i) => (
+          <li key={i} className="border-l-2 border-encina-100 pl-4">
+            <p className="text-xs text-ink-soft">{fmtDateTime(c.at)}</p>
+            <p className="mt-1 whitespace-pre-line leading-relaxed">{c.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
+function ProofReceived({ proof }: { proof: NonNullable<PublicBooking['paymentProof']> }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-piedra-200 bg-paper p-5 text-sm">
+      <FileCheck2 className="mt-0.5 size-5 shrink-0 text-encina-600" aria-hidden />
+      <div className="min-w-0">
+        <p className="font-medium">Justificante de pago recibido</p>
+        <p className="mt-0.5 break-all text-ink-soft">
+          {proof.fileName} · {fmtDateTime(proof.uploadedAt)} · {proof.verified ? 'revisado por la casa' : 'pendiente de revisar'}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -152,8 +205,10 @@ function PaymentStep({ booking: b, token }: { booking: PublicBooking; token: str
           <Copyable label="Titular" value={site.bankAccount.holder} />
         </dl>
         <p className="mt-4 text-xs text-ink-soft">
-          Escribe el concepto tal cual: la referencia y el nombre del grupo nos permiten identificar el pago. El importe incluye la fianza, que te
-          devolvemos después de la estancia.
+          Escribe el concepto tal cual: la referencia y el nombre del grupo nos permiten identificar el pago.{' '}
+          {b.free
+            ? 'Tu estancia es gratuita: solo pagas la fianza, que te devolvemos después de la estancia.'
+            : 'El importe incluye la fianza, que te devolvemos después de la estancia.'}
         </p>
       </div>
 

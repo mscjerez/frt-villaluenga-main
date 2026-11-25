@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi, type BookingPatch } from '@/api/admin'
-import type { Booking, TransitionPayload } from '@/domain/booking'
+import type { Booking, ManualBookingRequest, NewDateBlock, TransitionPayload } from '@/domain/booking'
+import type { SiteBannerInput } from '@/domain/settings'
 import type { NewLedgerEntry } from '@/domain/finance'
 
 export const useBookings = () => useQuery({ queryKey: ['admin', 'bookings'], queryFn: adminApi.bookings })
@@ -11,6 +12,18 @@ export const useBooking = (id: string) => {
     queryKey: ['admin', 'booking', id],
     queryFn: () => adminApi.booking(id),
     initialData: () => qc.getQueryData<Booking[]>(['admin', 'bookings'])?.find((b) => b.id === id),
+  })
+}
+
+export const useCreateBooking = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: ManualBookingRequest) => adminApi.createBooking(data),
+    onSuccess: (b) => {
+      qc.setQueryData(['admin', 'booking', b.id], b)
+      qc.invalidateQueries({ queryKey: ['admin', 'bookings'] })
+      qc.invalidateQueries({ queryKey: ['availability'] })
+    },
   })
 }
 
@@ -36,6 +49,36 @@ export const useUpdateBooking = (id: string) => {
   return useMutation({ mutationFn: (p: BookingPatch) => adminApi.updateBooking(id, p), onSuccess })
 }
 
+export const useAddComment = (id: string) => {
+  const onSuccess = useBookingUpdated()
+  return useMutation({ mutationFn: (text: string) => adminApi.addComment(id, text), onSuccess })
+}
+
+export const useDeleteComment = (id: string) => {
+  const onSuccess = useBookingUpdated()
+  return useMutation({ mutationFn: (commentId: string) => adminApi.deleteComment(id, commentId), onSuccess })
+}
+
+export const useBlocks = () => useQuery({ queryKey: ['admin', 'blocks'], queryFn: adminApi.blocks })
+
+function useBlocksChanged() {
+  const qc = useQueryClient()
+  return () => {
+    qc.invalidateQueries({ queryKey: ['admin', 'blocks'] })
+    qc.invalidateQueries({ queryKey: ['availability'] })
+  }
+}
+
+export const useAddBlock = () => {
+  const onSuccess = useBlocksChanged()
+  return useMutation({ mutationFn: (b: NewDateBlock) => adminApi.addBlock(b), onSuccess })
+}
+
+export const useDeleteBlock = () => {
+  const onSuccess = useBlocksChanged()
+  return useMutation({ mutationFn: (id: string) => adminApi.deleteBlock(id), onSuccess })
+}
+
 export const useAddEntry = () => {
   const qc = useQueryClient()
   return useMutation({
@@ -51,3 +94,18 @@ export const useDeleteEntry = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'ledger'] }),
   })
 }
+
+export const useAdminBanner = () => useQuery({ queryKey: ['admin', 'banner'], queryFn: adminApi.banner })
+
+export const useSaveBanner = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (b: SiteBannerInput) => adminApi.saveBanner(b),
+    onSuccess: (b) => {
+      qc.setQueryData(['admin', 'banner'], b)
+      qc.invalidateQueries({ queryKey: ['banner'] })
+    },
+  })
+}
+
+export const useSystem = () => useQuery({ queryKey: ['admin', 'system'], queryFn: adminApi.system, staleTime: 5 * 60_000 })

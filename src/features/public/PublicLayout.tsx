@@ -22,18 +22,21 @@ export function PublicLayout() {
         Saltar al contenido
       </a>
       <header className="sticky top-0 z-30 border-b border-piedra-200/80 bg-cal/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2.5 whitespace-nowrap font-display text-lg font-bold tracking-tight text-encina-700">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6 lg:gap-4 xl:gap-6">
+          <Link to="/" className="flex shrink-0 items-center gap-2.5 whitespace-nowrap font-display text-lg font-bold tracking-tight text-encina-700 lg:text-base xl:text-lg">
             <img src={withBase('/logo.svg')} alt="Scouts Católicos Asidonia-Jerez" width={44} height={44} className="size-11" />
             {site.name}
           </Link>
           <nav aria-label="Principal" className="hidden items-center gap-1 whitespace-nowrap lg:flex">
             {nav.map((n) => (
-              <a key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-piedra-100 hover:text-ink">
+              <a key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm text-ink-soft hover:bg-piedra-100 hover:text-ink lg:px-2 xl:px-3">
                 {n.label}
               </a>
             ))}
-            <a href={withBase('/#reservar')} className="ml-2 inline-flex h-9 items-center rounded-lg bg-encina-600 px-4 text-sm font-medium text-white hover:bg-encina-700">
+            <Link to="/mi-reserva" className="ml-2 inline-flex h-9 items-center rounded-lg px-3 text-sm font-medium text-encina-700 ring-1 ring-inset ring-encina-600/40 hover:bg-encina-50">
+              Mi reserva
+            </Link>
+            <a href={withBase('/#reservar')} className="ml-1 inline-flex h-9 items-center rounded-lg bg-encina-600 px-4 text-sm font-medium text-white hover:bg-encina-700">
               Solicitar reserva
             </a>
           </nav>
@@ -47,6 +50,9 @@ export function PublicLayout() {
               {n.label}
             </a>
           ))}
+          <Link to="/mi-reserva" onClick={() => setOpen(false)} className="block rounded-md px-2 py-3 text-base font-medium text-encina-700">
+            Mi reserva
+          </Link>
           <a href={withBase('/#reservar')} onClick={() => setOpen(false)} className="mt-2 flex h-11 items-center justify-center rounded-lg bg-encina-600 font-medium text-white">
             Solicitar reserva
           </a>
@@ -81,6 +87,9 @@ export function PublicLayout() {
             <a className="block hover:text-white" href={`tel:${site.contactPhone.replace(/\s/g, '')}`}>
               {site.contactPhone}
             </a>
+            <Link className="mt-2 block hover:text-white" to="/mi-reserva">
+              Consultar mi reserva
+            </Link>
             <a className="mt-2 inline-flex items-center gap-1.5 hover:text-white" href={site.mapsUrl} target="_blank" rel="noopener noreferrer">
               <MapPin className="size-4" aria-hidden />
               Cómo llegar (Google Maps)

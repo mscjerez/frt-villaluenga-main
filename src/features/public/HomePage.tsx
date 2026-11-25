@@ -5,6 +5,7 @@ import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import { Dialog } from '@/components/ui'
 import { BookingSection } from './BookingSection'
+import { HomeBanner } from './SiteBanner'
 
 export function HomePage() {
   // One lightbox for the whole page: hero photos and the gallery both open it.
@@ -12,6 +13,7 @@ export function HomePage() {
   const open = (photo: PhotoData) => setActive(photos.indexOf(photo))
   return (
     <>
+      <HomeBanner />
       <Hero onOpen={open} />
       <Pricing />
       <BookingSection />

@@ -17,7 +17,7 @@ import { Alert, Button, Field, Input, Textarea } from '@/components/ui'
 import { AvailabilityCalendar } from './AvailabilityCalendar'
 import { PriceSummary } from './PriceSummary'
 import { Captcha, type CaptchaHandle } from './Captcha'
-import { withBase } from '@/lib/base'
+import { trackingUrl, withBase } from '@/lib/base'
 
 const int = (msg: string) => z.number({ error: msg }).int({ error: 'Usa un número entero.' })
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: 'Indica la hora.' })
@@ -333,7 +333,7 @@ const Consent = ({ id, error, children, ...rest }: { id: string; error?: string;
 )
 
 function BookingSuccess({ result, onAnother }: { result: CreateBookingResponse; onAnother: () => void }) {
-  const link = `${location.origin}/reserva/${result.trackingToken}`
+  const link = trackingUrl(result.trackingToken)
   const [copied, setCopied] = useState(false)
   const copy = async () => {
     try {
@@ -368,7 +368,9 @@ function BookingSuccess({ result, onAnother }: { result: CreateBookingResponse; 
       </ol>
       <div className="mt-8">
         <p className="text-sm font-medium">Enlace de seguimiento</p>
-        <p className="mt-1 text-xs text-ink-soft">Guárdalo: es personal y sirve para ver el estado y subir el justificante de pago.</p>
+        <p className="mt-1 text-xs text-ink-soft">
+          Guárdalo: es personal y sirve para ver el estado y subir el justificante de pago. Si lo pierdes, búscala en «Mi reserva» con la referencia.
+        </p>
         <div className="mt-2 flex gap-2">
           <Input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" aria-label="Enlace de seguimiento" />
           <Button variant="secondary" onClick={copy} aria-live="polite">
@@ -378,7 +380,7 @@ function BookingSuccess({ result, onAnother }: { result: CreateBookingResponse; 
         </div>
       </div>
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link to={`/reserva/${result.trackingToken}`} className="inline-flex h-10 items-center rounded-lg bg-encina-600 px-4 text-sm font-medium text-white hover:bg-encina-700">
+        <Link to={`/reservas/${result.trackingToken}`} className="inline-flex h-10 items-center rounded-lg bg-encina-600 px-4 text-sm font-medium text-white hover:bg-encina-700">
           Ver mi reserva
         </Link>
         <Button variant="ghost" onClick={onAnother}>

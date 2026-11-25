@@ -3,6 +3,7 @@ import { prices } from '@/config/site'
 import { statusMeta, transitionLabel, type Booking, type BookingStatus, type TransitionPayload } from '@/domain/booking'
 import { ApiError } from '@/api/client'
 import { money, toISODate } from '@/lib/format'
+import { suggestedAmountDue } from '@/lib/pricing'
 import { Alert, Button, Dialog, Field, Input, Select, Textarea } from '@/components/ui'
 import { useTransition } from './queries'
 
@@ -20,8 +21,8 @@ function TransitionForm({ booking: b, to, onClose }: { booking: Booking; to: Boo
   const mutation = useTransition(b.id)
   const paid = b.amountPaid ?? 0
   const [amount, setAmount] = useState(() => {
-    if (to === 'pending_payment') return String(b.estimatedTotal)
-    if (to === 'confirmed') return String(b.amountDue ?? b.estimatedTotal)
+    if (to === 'pending_payment') return String(suggestedAmountDue(b))
+    if (to === 'confirmed') return String(b.amountDue ?? suggestedAmountDue(b))
     return ''
   })
   const [date, setDate] = useState(toISODate(new Date()))
@@ -73,10 +74,10 @@ function TransitionForm({ booking: b, to, onClose }: { booking: Booking; to: Boo
     <form onSubmit={submit} className="space-y-4">
       {to === 'pending_payment' && (
         <>
-          <Field label="Importe que debe pagar el grupo (€)" hint={`Estimación de la web: ${money(b.estimatedTotal)}, fianza incluida.`}>
+          <Field label="Importe que debe pagar el grupo (€)" hint={b.free ? `Estancia gratuita: solo la fianza (${money(prices.deposit)}).` : `Estimación de la web: ${money(b.estimatedTotal)}, fianza incluida.`}>
             {(p) => <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus {...p} />}
           </Field>
-          <Field label="Mensaje para el grupo" optional>
+          <Field label="Mensaje para el grupo" hint="Lo verá en su página de seguimiento." optional>
             {(p) => <Textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} {...p} />}
           </Field>
         </>
@@ -88,7 +89,11 @@ function TransitionForm({ booking: b, to, onClose }: { booking: Booking; to: Boo
             <Field label="Importe recibido (€)">{(p) => <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus {...p} />}</Field>
             <Field label="Fecha del pago">{(p) => <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} {...p} />}</Field>
           </div>
-          <p className="text-xs text-ink-soft">Se registran automáticamente en finanzas: {money(Math.min(prices.deposit, num(amount) || 0))} como fianza y el resto como ingreso.</p>
+          <p className="text-xs text-ink-soft">
+            {b.free
+              ? `Estancia gratuita: se registran ${money(Math.min(prices.deposit, num(amount) || 0))} como fianza y nada como ingreso.`
+              : `Se registran automáticamente en finanzas: ${money(Math.min(prices.deposit, num(amount) || 0))} como fianza y el resto como ingreso.`}
+          </p>
           <Field label="Nota" optional>
             {(p) => <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} {...p} />}
           </Field>

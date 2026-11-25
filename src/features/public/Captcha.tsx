@@ -14,14 +14,15 @@ export interface CaptchaHandle {
  */
 export const Captcha = forwardRef<CaptchaHandle, { onToken: (t: string | null) => void }>(function Captcha({ onToken }, ref) {
   const inner = useRef<TurnstileInstance>(null)
+  const bypass = !SITE_KEY && MOCK
   useImperativeHandle(ref, () => ({
     reset: () => {
-      onToken(null)
+      // Turnstile tokens are single use; the dev bypass just hands out a new fake one.
+      onToken(bypass ? 'dev-bypass' : null)
       inner.current?.reset()
     },
   }))
 
-  const bypass = !SITE_KEY && MOCK
   useEffect(() => {
     if (bypass) onToken('dev-bypass')
   }, [bypass, onToken])

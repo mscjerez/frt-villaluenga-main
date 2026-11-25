@@ -180,6 +180,23 @@ export function Dialog({ open, onClose, title, description, children, className 
 
 // ---------- Misc ----------
 
+/** On/off control. `label` is the accessible name when no visible <label> wraps it. */
+export function Switch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label?: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-label={label}
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn('relative h-6 w-10 shrink-0 rounded-full transition-colors disabled:opacity-50', checked ? 'bg-encina-600' : 'bg-piedra-300')}
+    >
+      <span className={cn('absolute top-0.5 left-0.5 size-5 rounded-full bg-white shadow transition-transform', checked && 'translate-x-4')} />
+    </button>
+  )
+}
+
 export function Spinner({ label = 'Cargando' }: { label?: string }) {
   return (
     <div role="status" className="flex items-center justify-center gap-2 py-10 text-sm text-ink-soft">

@@ -2,3 +2,8 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /reserva/
+Disallow: /reservas/
+Disallow: /mi-reserva
+Disallow: /api/
+
+Sitemap: https://rinconscout.mscjerez.es/sitemap.xml

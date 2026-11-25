@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import { Navigate, NavLink, Outlet, useLocation } from 'react-router'
-import { LayoutDashboard, CalendarRange, ListChecks, Wallet, LogOut, Menu, X, ExternalLink } from 'lucide-react'
+import { LayoutDashboard, CalendarRange, ListChecks, Wallet, LogOut, Menu, X, ExternalLink, Settings } from 'lucide-react'
 import { site } from '@/config/site'
 import { cn } from '@/lib/cn'
 import { withBase } from '@/lib/base'
 import { Spinner } from '@/components/ui'
 import { useAuth } from './auth'
-import { useBookings } from './queries'
+import { buildInfo } from '@/config/build'
+import { useBookings, useSystem } from './queries'
 
 const nav = [
   { to: '/admin', label: 'Panel', icon: LayoutDashboard, end: true },
   { to: '/admin/reservas', label: 'Reservas', icon: ListChecks },
   { to: '/admin/calendario', label: 'Calendario', icon: CalendarRange },
   { to: '/admin/finanzas', label: 'Finanzas', icon: Wallet },
+  { to: '/admin/ajustes', label: 'Ajustes', icon: Settings },
 ]
 
 export function AdminLayout() {
@@ -62,6 +64,7 @@ export function AdminLayout() {
             <LogOut className="size-4" aria-hidden />
             Cerrar sesión
           </button>
+          <VersionLine onClick={() => setOpen(false)} />
         </div>
       </aside>
       {open && <div className="fixed inset-0 z-30 bg-ink/30 lg:hidden" onClick={() => setOpen(false)} aria-hidden />}
@@ -78,6 +81,16 @@ export function AdminLayout() {
         </main>
       </div>
     </div>
+  )
+}
+
+function VersionLine({ onClick }: { onClick: () => void }) {
+  const { data, isError } = useSystem()
+  const api = isError ? '?' : data ? `v${data.api.version}` : '…'
+  return (
+    <NavLink to="/admin/ajustes" onClick={onClick} className="mt-1 block px-3 py-1 text-[11px] tabular text-piedra-500 hover:text-ink-soft" title="Versiones instaladas">
+      Web v{buildInfo.version} · API {api}
+    </NavLink>
   )
 }
 

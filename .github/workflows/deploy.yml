@@ -40,8 +40,10 @@ jobs:
         env:
           # e.g. "/frt-villaluenga-main/" for a project site, "/" for a custom domain.
           BASE_PATH: ${{ steps.pages.outputs.base_path && format('{0}/', steps.pages.outputs.base_path) || '/' }}
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+          # Repository variables override these (Settings → Secrets and variables → Actions → Variables).
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.mscjerez.es/v1/rcc' }}
+          # Cloudflare's always-pass test key until VITE_TURNSTILE_SITE_KEY is set with the real one.
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA' }}
 
       # SPA fallback: Pages serves 404.html for unknown paths, so deep links like /admin load the app.
       - run: cp dist/index.html dist/404.html

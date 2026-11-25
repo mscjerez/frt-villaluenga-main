@@ -9,18 +9,22 @@ import {
   type Booking,
   type BookingRequest,
   type BookingStatus,
+  type DateBlock,
+  type NewDateBlock,
   type TransitionPayload,
 } from '@/domain/booking'
 import type { LedgerEntry, NewLedgerEntry } from '@/domain/finance'
-import { estimatePrice } from '@/lib/pricing'
+import { emptyBanner, type SiteBanner } from '@/domain/settings'
+import { estimatePrice, suggestedAmountDue } from '@/lib/pricing'
 import { prices } from '@/config/site'
 
-const KEY = 'rcc-mock-db-v1'
+const KEY = 'rcc-mock-db-v2'
 
 interface Db {
   bookings: Booking[]
   ledger: LedgerEntry[]
-  tokens: Record<string, string> // trackingToken -> bookingId
+  blocks: DateBlock[]
+  banner: SiteBanner
 }
 
 const iso = (d: Date) => format(d, 'yyyy-MM-dd')
@@ -37,7 +41,7 @@ function nextReference(created: Date) {
   return `RCC-${format(created, 'yy')}-${String(counter).padStart(4, '0')}`
 }
 
-export const db: Db = { bookings: [], ledger: [], tokens: {} }
+export const db: Db = { bookings: [], ledger: [], blocks: [], banner: emptyBanner }
 
 export const persist = () => {
   try {
@@ -52,6 +56,7 @@ function init() {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       Object.assign(db, JSON.parse(raw) as Db)
+      db.banner ??= emptyBanner // saved before the banner existed
       counter = db.bookings.length
       return
     }
@@ -70,13 +75,18 @@ export function resetDb() {
 // ---------- availability ----------
 
 export function availability(from: string, to: string): AvailabilityRange[] {
-  return db.bookings
+  const bookings = db.bookings
     .filter((b) => b.departureDate >= from && b.arrivalDate <= to)
     .flatMap<AvailabilityRange>((b) => {
       if (blockingStatuses.includes(b.status)) return [{ start: b.arrivalDate, end: b.departureDate, status: 'busy' }]
       if (tentativeStatuses.includes(b.status)) return [{ start: b.arrivalDate, end: b.departureDate, status: 'pending' }]
       return []
     })
+  // Closed dates look like any other busy day: the reason stays internal.
+  const blocks = db.blocks
+    .filter((k) => k.end >= from && k.start <= to)
+    .map<AvailabilityRange>((k) => ({ start: k.start, end: k.end, status: 'busy' }))
+  return [...bookings, ...blocks]
 }
 
 export function overlapsBusy(arrival: string, departure: string, ignoreId?: string) {
@@ -85,9 +95,39 @@ export function overlapsBusy(arrival: string, departure: string, ignoreId?: stri
   )
 }
 
+export const overlapsBlock = (arrival: string, departure: string) => db.blocks.some((k) => k.start <= departure && k.end >= arrival)
+
+export function addBlock(block: NewDateBlock, by: string): DateBlock {
+  if (!block.start || !block.end || block.end < block.start) throw new RuleError('invalid_dates', 'La fecha final no puede ser anterior a la inicial.')
+  if (!block.reason.trim()) throw new RuleError('reason_required', 'Indica el motivo del cierre.')
+  const created: DateBlock = { ...block, reason: block.reason.trim().slice(0, 200), id: uid(), createdBy: by, createdAt: new Date().toISOString() }
+  db.blocks.push(created)
+  db.blocks.sort((a, b) => (a.start < b.start ? -1 : 1))
+  return created
+}
+
+export const findByToken = (token: string) => db.bookings.find((b) => b.trackingToken === token)
+
+/** Normalised reference so "rcc 26 12" or "RCC-26-0012" both match. */
+const normRef = (r: string) => r.toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+export function lookup(reference: string) {
+  const ref = normRef(reference)
+  return db.bookings.find((b) => normRef(b.reference) === ref)
+}
+
+export function addComment(b: Booking, text: string, by: string, at = new Date()) {
+  b.comments.push({ id: uid(), at: at.toISOString(), by, text: text.trim().slice(0, 2000) })
+  b.updatedAt = at.toISOString()
+}
+
 // ---------- bookings ----------
 
-export function createBooking(req: Omit<BookingRequest, 'acceptPrivacy' | 'acceptRules'>, createdAt = new Date()): { booking: Booking; token: string } {
+export function createBooking(
+  req: Omit<BookingRequest, 'acceptPrivacy' | 'acceptRules'>,
+  createdAt = new Date(),
+  opts: { by?: string; note?: string; free?: boolean; internalNotes?: string } = {},
+): { booking: Booking; token: string } {
   const estimate = estimatePrice(req.arrivalDate, req.departureDate, req.totalGuests)
   const booking: Booking = {
     ...req,
@@ -105,13 +145,14 @@ export function createBooking(req: Omit<BookingRequest, 'acceptPrivacy' | 'accep
     cancelReason: null,
     refund: null,
     depositRetained: 0,
-    internalNotes: '',
-    history: [{ at: createdAt.toISOString(), from: null, to: 'pending', by: 'Formulario web' }],
+    internalNotes: opts.internalNotes ?? '',
+    free: opts.free ?? false,
+    trackingToken: randomToken(),
+    comments: [],
+    history: [{ at: createdAt.toISOString(), from: null, to: 'pending', by: opts.by ?? 'Formulario web', ...(opts.note ? { note: opts.note } : {}) }],
   }
-  const token = randomToken()
   db.bookings.unshift(booking)
-  db.tokens[token] = booking.id
-  return { booking, token }
+  return { booking, token: booking.trackingToken }
 }
 
 export class RuleError extends Error {
@@ -140,8 +181,11 @@ export function applyTransition(b: Booking, p: TransitionPayload, by: string, at
       if (!(p.amountDue > 0)) throw new RuleError('amount_required', 'Indica el importe a pagar.')
       if (overlapsBusy(b.arrivalDate, b.departureDate, b.id))
         throw new RuleError('dates_taken', 'Las fechas se solapan con otra reserva aceptada o confirmada.')
+      if (overlapsBlock(b.arrivalDate, b.departureDate)) throw new RuleError('dates_blocked', 'Las fechas coinciden con un cierre de la casa.')
       b.amountDue = p.amountDue
-      note = p.note || `Importe a pagar: ${p.amountDue} €`
+      note = `Importe a pagar: ${p.amountDue} €`
+      // The message to the group is shown on the tracking page.
+      if (p.note) addComment(b, p.note, by, at)
       break
     case 'confirmed': {
       if (!(p.amountPaid > 0)) throw new RuleError('amount_required', 'Indica el importe pagado.')
@@ -149,7 +193,9 @@ export function applyTransition(b: Booking, p: TransitionPayload, by: string, at
       b.paidAt = p.paidAt
       const deposit = Math.min(prices.deposit, p.amountPaid)
       ledger({ date: p.paidAt, kind: 'deposit_in', category: 'Fianzas', amount: deposit, description: `Fianza ${b.organization}` }, b, by)
-      ledger({ date: p.paidAt, kind: 'income', category: 'Estancias', amount: p.amountPaid - deposit, description: `Estancia ${b.organization}` }, b, by)
+      // Free stays only pay the deposit and never count as income.
+      if (!b.free)
+        ledger({ date: p.paidAt, kind: 'income', category: 'Estancias', amount: p.amountPaid - deposit, description: `Estancia ${b.organization}` }, b, by)
       note = p.note
       break
     }
@@ -223,18 +269,19 @@ const activities = [
 function seed() {
   db.bookings = []
   db.ledger = []
-  db.tokens = {}
+  db.blocks = []
+  db.banner = emptyBanner
   counter = 0
   const today = new Date()
-  const plan: Array<{ off: number; nights: number; status: BookingStatus; kids: number; mons: number; keys?: Booking['keys']; created: number }> = [
+  const plan: Array<{ off: number; nights: number; status: BookingStatus; kids: number; mons: number; keys?: Booking['keys']; created: number; free?: boolean; message?: string }> = [
     { off: -120, nights: 2, status: 'completed', kids: 24, mons: 5, created: -160 },
     { off: -85, nights: 0, status: 'completed', kids: 30, mons: 6, created: -110 },
     { off: -60, nights: 3, status: 'cancelled', kids: 18, mons: 4, created: -90 },
     { off: -34, nights: 2, status: 'refund', kids: 22, mons: 4, keys: 'returned', created: -70 },
     { off: -12, nights: 1, status: 'confirmed', kids: 15, mons: 3, keys: 'returned', created: -50 },
     { off: 9, nights: 2, status: 'confirmed', kids: 26, mons: 5, keys: 'handed', created: -40 },
-    { off: 23, nights: 2, status: 'confirmed', kids: 20, mons: 4, created: -30 },
-    { off: 37, nights: 3, status: 'pending_payment', kids: 28, mons: 6, created: -10 },
+    { off: 23, nights: 2, status: 'confirmed', kids: 20, mons: 4, created: -30, free: true },
+    { off: 37, nights: 3, status: 'pending_payment', kids: 28, mons: 6, created: -10, message: 'Os esperamos. Recordad traer el parte de incidencias impreso.' },
     { off: 51, nights: 2, status: 'pending', kids: 19, mons: 4, created: -3 },
     { off: 52, nights: 1, status: 'pending', kids: 12, mons: 2, created: -1 },
     { off: 72, nights: 0, status: 'pending', kids: 34, mons: 6, created: 0 },
@@ -263,15 +310,16 @@ function seed() {
     {
       const { booking: b } = createBooking(req, created)
       const by = 'Carlos'
+      b.free = !!p.free
       const step = (payload: TransitionPayload, dayOffset: number) => applyTransition(b, payload, by, addDays(created, dayOffset))
-      const due = b.estimatedTotal
+      const due = suggestedAmountDue(b)
       const reached = (s: BookingStatus) => ORDER.indexOf(p.status) >= ORDER.indexOf(s)
 
       if (p.status === 'cancelled') {
         step({ to: 'pending_payment', amountDue: due }, 2)
         step({ to: 'cancelled', reason: 'El grupo cambió la fecha de la salida y no podía venir.' }, 9)
       } else {
-        if (reached('pending_payment')) step({ to: 'pending_payment', amountDue: due }, 2)
+        if (reached('pending_payment')) step({ to: 'pending_payment', amountDue: due, note: p.message }, 2)
         if (reached('confirmed')) {
           const paid = addDays(created, 6)
           step({ to: 'confirmed', amountPaid: due, paidAt: iso(paid) }, 6)
@@ -291,6 +339,15 @@ function seed() {
   })
   // Oldest first while seeding keeps references chronological; newest first for the UI.
   db.bookings.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+
+  db.blocks.push({
+    id: uid(),
+    start: iso(addDays(today, 62)),
+    end: iso(addDays(today, 65)),
+    reason: 'Revisión de la instalación eléctrica',
+    createdBy: 'Carlos',
+    createdAt: today.toISOString(),
+  })
 
   // Some running costs so the finance view has data.
   const costs: Array<[number, string, number, string]> = [

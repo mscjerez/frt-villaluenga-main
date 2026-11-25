@@ -51,3 +51,6 @@ export function estimatePrice(arrival: string, departure: string, guests: number
 function line(label: string, units: number, guests: number, unitPrice: number): PriceLine {
   return { label, units, guests, unitPrice, amount: units * guests * unitPrice }
 }
+
+/** Amount to ask the group for: the full estimate, or only the deposit for a free stay. */
+export const suggestedAmountDue = (b: { free: boolean; estimatedTotal: number }) => (b.free ? prices.deposit : b.estimatedTotal)

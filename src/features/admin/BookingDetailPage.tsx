@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { ArrowLeft, Phone, Mail, FileText, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, FileText, CheckCircle2, Copy, Check, ExternalLink, Gift, Trash2, Download } from 'lucide-react'
 import { statusMeta, transitions, transitionLabel, type Booking, type BookingStatus, type KeysStatus } from '@/domain/booking'
 import { estimatePrice } from '@/lib/pricing'
+import { trackingUrl } from '@/lib/base'
+import { API_BASE } from '@/api/client'
+import { prices, site } from '@/config/site'
 import { fmtDate, fmtDateTime, fmtRange, money } from '@/lib/format'
 import { cn } from '@/lib/cn'
-import { Alert, Button, Panel, Spinner, StatusBadge, Textarea } from '@/components/ui'
+import { Alert, Button, Input, Panel, Spinner, StatusBadge, Switch, Textarea } from '@/components/ui'
 import { toneDot } from '@/components/ui/tones'
-import { useBooking, useUpdateBooking } from './queries'
+import { useAddComment, useBooking, useDeleteComment, useUpdateBooking } from './queries'
 import { TransitionDialog } from './TransitionDialog'
 
 export function BookingDetailPage() {
@@ -40,6 +43,12 @@ export function BookingDetailPage() {
           <h1 className="text-3xl font-bold tracking-tight">{b.organization}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={b.status} />
+            {b.free && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-encina-50 px-2.5 py-0.5 text-xs font-medium text-encina-700 ring-1 ring-inset ring-encina-600/20">
+                <Gift className="size-3.5" aria-hidden />
+                Gratuita
+              </span>
+            )}
             <span className="text-sm text-ink-soft">{statusMeta[b.status].description}</span>
           </div>
         </div>
@@ -76,14 +85,14 @@ export function BookingDetailPage() {
             </dl>
             <div className="border-t border-piedra-200 p-5">
               <p className="text-sm text-ink-soft">Actividad</p>
-              <p className="mt-1 whitespace-pre-line text-sm leading-relaxed">{b.activity}</p>
+              <p className={cn('mt-1 whitespace-pre-line text-sm leading-relaxed', !b.activity && 'text-piedra-500')}>{b.activity || 'Sin descripción'}</p>
             </div>
           </Panel>
 
           <Panel title="Persona responsable">
             <dl className="grid gap-x-6 gap-y-4 p-5 text-sm sm:grid-cols-2">
               <Item label="Nombre" value={b.responsibleName} />
-              <Item label="DNI / NIE" value={b.dni} mono />
+              <Item label="DNI / NIE" value={b.dni || 'Sin indicar'} mono={!!b.dni} />
               <div>
                 <dt className="text-ink-soft">Teléfono</dt>
                 <dd className="mt-0.5">
@@ -96,10 +105,14 @@ export function BookingDetailPage() {
               <div>
                 <dt className="text-ink-soft">Correo</dt>
                 <dd className="mt-0.5">
-                  <a className="inline-flex items-center gap-1.5 break-all font-medium text-encina-600 hover:underline" href={`mailto:${b.email}?subject=${encodeURIComponent(`Reserva ${b.reference}`)}`}>
-                    <Mail className="size-3.5 shrink-0" aria-hidden />
-                    {b.email}
-                  </a>
+                  {b.email ? (
+                    <a className="inline-flex items-center gap-1.5 break-all font-medium text-encina-600 hover:underline" href={`mailto:${b.email}?subject=${encodeURIComponent(`Reserva ${b.reference}`)}`}>
+                      <Mail className="size-3.5 shrink-0" aria-hidden />
+                      {b.email}
+                    </a>
+                  ) : (
+                    <span className="font-medium">Sin indicar</span>
+                  )}
                 </dd>
               </div>
             </dl>
@@ -109,8 +122,10 @@ export function BookingDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <TrackingLink booking={b} />
           <Keys booking={b} />
           <PaymentProof booking={b} />
+          <Comments booking={b} />
           <Notes booking={b} />
           <Panel title="Historial">
             <ol className="relative space-y-5 p-5">
@@ -119,8 +134,7 @@ export function BookingDetailPage() {
                   <span className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', toneDot[statusMeta[h.to].tone])} aria-hidden />
                   <div>
                     <p className="font-medium">
-                      {h.from ? `${statusMeta[h.from].label} → ` : ''}
-                      {statusMeta[h.to].label}
+                      {h.from === h.to ? 'Cambio de datos' : `${h.from ? `${statusMeta[h.from].label} → ` : ''}${statusMeta[h.to].label}`}
                     </p>
                     <p className="text-xs text-ink-soft">
                       {fmtDateTime(h.at)} · {h.by}
@@ -151,7 +165,12 @@ function Item({ label, value, mono }: { label: string; value: string; mono?: boo
 function Money({ booking: b }: { booking: Booking }) {
   const est = estimatePrice(b.arrivalDate, b.departureDate, b.totalGuests)
   return (
-    <Panel title="Importes">
+    <Panel title="Importes" action={<FreeToggle booking={b} />}>
+      {b.free && (
+        <p className="border-b border-piedra-200 bg-encina-50 px-5 py-3 text-sm text-encina-700">
+          Estancia gratuita: el grupo solo paga la fianza ({money(prices.deposit)}) y la reserva no suma ingresos en finanzas.
+        </p>
+      )}
       <dl className="divide-y divide-piedra-200 text-sm">
         {est?.lines.map((l) => (
           <Row key={l.label} label={`${l.units > 1 ? `${l.units} × ` : ''}${l.label} (${l.guests} × ${money(l.unitPrice)})`} value={money(l.amount)} muted />
@@ -164,6 +183,23 @@ function Money({ booking: b }: { booking: Booking }) {
         {b.refund && <Row label={`Devolución${b.refund.doneAt ? ` (hecha el ${fmtDate(b.refund.doneAt)})` : ' (pendiente)'}`} value={money(b.refund.deposit + b.refund.payment)} />}
       </dl>
     </Panel>
+  )
+}
+
+function FreeToggle({ booking: b }: { booking: Booking }) {
+  const update = useUpdateBooking(b.id)
+  const editable = b.status === 'pending' || b.status === 'pending_payment'
+  return (
+    <div className="flex items-center gap-2.5">
+      {update.isError && <span className="text-xs text-busy">No se ha podido cambiar</span>}
+      <label
+        className={cn('flex items-center gap-2 text-sm', editable ? 'cursor-pointer' : 'cursor-not-allowed text-ink-soft')}
+        title={editable ? 'Solo paga la fianza y no cuenta como ingreso' : 'Solo se puede cambiar antes de registrar el pago'}
+      >
+        <span>Gratuita</span>
+        <Switch label="Estancia gratuita" checked={b.free} disabled={!editable || update.isPending} onChange={(free) => update.mutate({ free })} />
+      </label>
+    </div>
   )
 }
 
@@ -219,6 +255,14 @@ function PaymentProof({ booking: b }: { booking: Booking }) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-medium">{p.fileName}</p>
           <p className="text-xs text-ink-soft">Subido el {fmtDateTime(p.uploadedAt)}</p>
+          {/* A plain link: the browser sends the session cookie and saves the file (the API answers with Content-Disposition: attachment). */}
+          <a
+            href={`${API_BASE}/admin/bookings/${b.id}/payment-proof`}
+            className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-encina-600 hover:underline"
+          >
+            <Download className="size-3.5" aria-hidden />
+            Descargar
+          </a>
         </div>
         {p.verified ? (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-free">
@@ -231,6 +275,90 @@ function PaymentProof({ booking: b }: { booking: Booking }) {
           </Button>
         )}
       </div>
+    </Panel>
+  )
+}
+
+function TrackingLink({ booking: b }: { booking: Booking }) {
+  const [copied, setCopied] = useState(false)
+  const url = trackingUrl(b.trackingToken)
+  const body = `Hola ${b.responsibleName.split(' ')[0]}:\n\nPuedes ver el estado de tu reserva ${b.reference} en el ${site.name} y subir el justificante de pago aquí:\n${url}\n\nUn saludo.`
+  return (
+    <Panel title="Enlace del grupo">
+      <div className="space-y-3 p-5">
+        <p className="text-xs text-ink-soft">El enlace de seguimiento del grupo (se le envía por correo). Da acceso a la reserva: compártelo solo con la persona responsable.</p>
+        <div className="flex gap-2">
+          <Input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="font-mono text-xs" aria-label="Enlace de seguimiento" />
+          <Button
+            variant="secondary"
+            aria-label="Copiar enlace"
+            onClick={() => navigator.clipboard?.writeText(url).then(() => setCopied(true), () => {})}
+          >
+            {copied ? <Check className="size-4 text-free" /> : <Copy className="size-4" />}
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 font-medium text-encina-600 hover:underline">
+            <ExternalLink className="size-3.5" aria-hidden />
+            Abrir como el grupo
+          </a>
+          <a
+            href={`mailto:${b.email}?subject=${encodeURIComponent(`Tu reserva ${b.reference}`)}&body=${encodeURIComponent(body)}`}
+            className="inline-flex items-center gap-1.5 font-medium text-encina-600 hover:underline"
+          >
+            <Mail className="size-3.5" aria-hidden />
+            Reenviar por correo
+          </a>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
+function Comments({ booking: b }: { booking: Booking }) {
+  const add = useAddComment(b.id)
+  const remove = useDeleteComment(b.id)
+  const [text, setText] = useState('')
+  return (
+    <Panel title="Mensajes para el grupo">
+      {b.comments.length > 0 && (
+        <ol className="divide-y divide-piedra-200 border-b border-piedra-200">
+          {[...b.comments].reverse().map((c) => (
+            <li key={c.id} className="flex gap-3 px-5 py-3 text-sm">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-ink-soft">
+                  {fmtDateTime(c.at)} · {c.by}
+                </p>
+                <p className="mt-1 whitespace-pre-line leading-relaxed">{c.text}</p>
+              </div>
+              <button
+                type="button"
+                className="self-start rounded p-1 text-piedra-500 hover:bg-piedra-100 hover:text-busy disabled:opacity-50"
+                aria-label="Borrar mensaje"
+                disabled={remove.isPending}
+                onClick={() => window.confirm('¿Borrar este mensaje? El grupo dejará de verlo.') && remove.mutate(c.id)}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <form
+        className="space-y-3 p-5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (text.trim()) add.mutate(text, { onSuccess: () => setText('') })
+        }}
+      >
+        <Textarea rows={3} value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} placeholder="Lo verá el grupo en su página de seguimiento" aria-label="Nuevo mensaje para el grupo" />
+        {add.isError && <Alert>No se ha podido publicar el mensaje.</Alert>}
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" disabled={!text.trim()} loading={add.isPending}>
+            Publicar mensaje
+          </Button>
+        </div>
+      </form>
     </Panel>
   )
 }
