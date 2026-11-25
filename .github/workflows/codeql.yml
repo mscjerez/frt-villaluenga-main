@@ -15,7 +15,9 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
+    # Job permissions replace the workflow's: checkout needs contents: read explicitly.
     permissions:
+      contents: read
       security-events: write
       actions: read
     strategy:
