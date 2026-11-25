@@ -25,6 +25,7 @@ export const router = createBrowserRouter([
     lazy: async () => ({ Component: (await import('@/features/admin/AdminRoot')).AdminRoot }),
     children: [
       { path: 'login', lazy: async () => ({ Component: (await import('@/features/admin/LoginPage')).LoginPage }) },
+      { path: 'activar', lazy: async () => ({ Component: (await import('@/features/admin/ActivatePage')).ActivatePage }) },
       {
         lazy: async () => ({ Component: (await import('@/features/admin/AdminLayout')).AdminLayout }),
         children: [

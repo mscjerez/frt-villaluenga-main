@@ -9,7 +9,22 @@ export interface AdminUser {
   name: string
 }
 
-export type LoginResponse = { mfaRequired: true; challengeId: string }
+export type MfaMethod = 'totp' | 'email'
+
+/** `method` says where the code comes from: the authenticator app or an email we just sent. */
+export type LoginResponse = { mfaRequired: true; challengeId: string; method: MfaMethod }
+
+export interface AdminAccount {
+  id: string
+  email: string
+  name: string
+  mfaMethod: MfaMethod
+  /** invited: the email link hasn't been used yet; expired: the link ran out, resend it. */
+  status: 'active' | 'invited' | 'expired'
+  invitedBy: string | null
+  createdAt: string
+  isMe: boolean
+}
 
 export interface BookingPatch {
   keys?: KeysStatus
@@ -27,6 +42,13 @@ export const adminApi = {
   verifyMfa: (challengeId: string, code: string) => api.post<{ user: AdminUser }>('/admin/auth/mfa', { challengeId, code }),
   session: () => api.get<{ user: AdminUser }>('/admin/auth/session'),
   logout: () => api.post<void>('/admin/auth/logout'),
+  invitation: (token: string) => api.post<{ email: string; name: string }>('/admin/auth/invitation', { token }),
+  acceptInvitation: (token: string, password: string) => api.post<{ email: string }>('/admin/auth/invitation/accept', { token, password }),
+
+  admins: () => api.get<AdminAccount[]>('/admin/admins'),
+  inviteAdmin: (name: string, email: string) => api.post<AdminAccount>('/admin/admins', { name, email }),
+  resendInvitation: (id: string) => api.post<void>(`/admin/admins/${id}/invitation`),
+  deleteAdmin: (id: string) => api.del<void>(`/admin/admins/${id}`),
 
   bookings: () => api.get<Booking[]>('/admin/bookings'),
   booking: (id: string) => api.get<Booking>(`/admin/bookings/${id}`),

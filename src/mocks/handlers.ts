@@ -16,7 +16,51 @@ const LOCK_MS = 15 * 60_000
 const err = (status: number, code: string, message: string, extra: Record<string, unknown> = {}, headers?: HeadersInit) =>
   HttpResponse.json({ code, message, ...extra }, { status, headers })
 
-const challenges = new Map<string, { email: string; expires: number }>()
+const challenges = new Map<string, { email: string; expires: number; code?: string; attempts?: number }>()
+
+// Admin accounts for the "Administradores" panel. Invited accounts log in with an emailed code; in the mock the
+// "email" is the browser console.
+interface MockAdmin {
+  id: string
+  email: string
+  name: string
+  password: string | null
+  mfaMethod: 'totp' | 'email'
+  inviteToken: string | null
+  inviteExpires: number
+  invitedBy: string | null
+  createdAt: string
+}
+const mockAdmins: MockAdmin[] = [
+  {
+    id: 'u1',
+    email: MOCK_ADMIN.email,
+    name: MOCK_ADMIN.name,
+    password: MOCK_ADMIN.password,
+    mfaMethod: 'totp',
+    inviteToken: null,
+    inviteExpires: 0,
+    invitedBy: null,
+    createdAt: '2026-01-01T10:00:00.000Z',
+  },
+]
+const accountView = (a: MockAdmin, meEmail: string) => ({
+  id: a.id,
+  email: a.email,
+  name: a.name,
+  mfaMethod: a.mfaMethod,
+  status: a.password ? 'active' : a.inviteExpires > Date.now() ? 'invited' : 'expired',
+  invitedBy: a.invitedBy,
+  createdAt: a.createdAt,
+  isMe: a.email === meEmail,
+})
+function mockInvite(a: MockAdmin, by: string) {
+  a.inviteToken = crypto.randomUUID()
+  a.inviteExpires = Date.now() + 24 * 3600_000
+  a.invitedBy = by
+  console.info(`[mock email] Invitación para ${a.email}: ${location.origin}${import.meta.env.BASE_URL}admin/activar#${a.inviteToken}`)
+}
+const invitationErr = () => err(410, 'invitation_invalid', 'El enlace de activación no es válido o ha caducado. Pide que te envíen uno nuevo.')
 
 function sessionUser() {
   const raw = sessionStorage.getItem(SESSION_KEY)
@@ -140,7 +184,8 @@ export const handlers = [
       return err(429, 'locked', 'Demasiados intentos fallidos. Espera unos minutos antes de volver a probar.', {}, { 'Retry-After': String(secs) })
     }
     const { email, password } = (await request.json()) as { email: string; password: string }
-    if (email.trim().toLowerCase() !== MOCK_ADMIN.email || password !== MOCK_ADMIN.password) {
+    const account = mockAdmins.find((a) => a.email === email.trim().toLowerCase())
+    if (!account?.password || password !== account.password) {
       fails.n++
       if (fails.n >= MAX_FAILS) Object.assign(fails, { n: 0, until: Date.now() + LOCK_MS })
       localStorage.setItem(LOGIN_FAILS_KEY, JSON.stringify(fails))
@@ -148,8 +193,14 @@ export const handlers = [
     }
     localStorage.removeItem(LOGIN_FAILS_KEY)
     const challengeId = crypto.randomUUID()
-    challenges.set(challengeId, { email, expires: Date.now() + 5 * 60_000 })
-    return HttpResponse.json({ mfaRequired: true, challengeId })
+    if (account.mfaMethod === 'email') {
+      const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')
+      challenges.set(challengeId, { email: account.email, expires: Date.now() + 3 * 60_000, code })
+      console.info(`[mock email] Código de acceso para ${account.email}: ${code}`)
+      return HttpResponse.json({ mfaRequired: true, challengeId, method: 'email' })
+    }
+    challenges.set(challengeId, { email: account.email, expires: Date.now() + 5 * 60_000 })
+    return HttpResponse.json({ mfaRequired: true, challengeId, method: 'totp' })
   }),
 
   http.post(`${P}/admin/auth/mfa`, async ({ request }) => {
@@ -157,9 +208,18 @@ export const handlers = [
     const { challengeId, code } = (await request.json()) as { challengeId: string; code: string }
     const ch = challenges.get(challengeId)
     if (!ch || ch.expires < Date.now()) return err(401, 'challenge_expired', 'El inicio de sesión ha caducado. Vuelve a introducir tu contraseña.')
-    if (code !== MOCK_ADMIN.totp) return err(401, 'invalid_code', 'Código incorrecto. Usa el código actual de tu app de autenticación.')
+    if (ch.code && code !== ch.code) {
+      const left = 3 - (ch.attempts = (ch.attempts ?? 0) + 1)
+      if (left <= 0) {
+        challenges.delete(challengeId)
+        return err(401, 'challenge_expired', 'Has agotado los intentos. Vuelve a introducir tu contraseña para recibir un código nuevo.')
+      }
+      return err(401, 'invalid_code', `Código incorrecto. Usa el último código que te hemos enviado por correo. Te ${left === 1 ? 'queda 1 intento' : `quedan ${left} intentos`}.`)
+    }
+    if (!ch.code && code !== MOCK_ADMIN.totp) return err(401, 'invalid_code', 'Código incorrecto. Usa el código actual de tu app de autenticación.')
     challenges.delete(challengeId)
-    const user = { id: 'u1', email: MOCK_ADMIN.email, name: MOCK_ADMIN.name }
+    const account = mockAdmins.find((a) => a.email === ch.email)!
+    const user = { id: account.id, email: account.email, name: account.name }
     sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...user, expires: Date.now() + 8 * 3600_000 }))
     return HttpResponse.json({ user })
   }),
@@ -168,11 +228,83 @@ export const handlers = [
     await delay(150)
     const u = sessionUser()
     if (!u) return err(401, 'unauthenticated', 'No hay sesión.')
-    return HttpResponse.json({ user: { id: 'u1', email: u.email, name: u.name } })
+    return HttpResponse.json({ user: { id: mockAdmins.find((a) => a.email === u.email)?.id ?? 'u1', email: u.email, name: u.name } })
   }),
 
   http.post(`${P}/admin/auth/logout`, () => {
     sessionStorage.removeItem(SESSION_KEY)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post(`${P}/admin/auth/invitation`, async ({ request }) => {
+    await delay(300)
+    const { token } = (await request.json()) as { token: string }
+    const a = mockAdmins.find((x) => x.inviteToken === token && x.inviteExpires > Date.now() && !x.password)
+    return a ? HttpResponse.json({ email: a.email, name: a.name }) : invitationErr()
+  }),
+
+  http.post(`${P}/admin/auth/invitation/accept`, async ({ request }) => {
+    await delay(500)
+    const { token, password } = (await request.json()) as { token: string; password: string }
+    const a = mockAdmins.find((x) => x.inviteToken === token && x.inviteExpires > Date.now() && !x.password)
+    if (!a) return invitationErr()
+    if (password.length < 12) return err(422, 'validation', 'Usa al menos 12 caracteres.', { fieldErrors: { password: 'Usa al menos 12 caracteres.' } })
+    Object.assign(a, { password, inviteToken: null, inviteExpires: 0 })
+    return HttpResponse.json({ email: a.email })
+  }),
+
+  // ---------------- admin accounts ----------------
+  http.get(`${P}/admin/admins`, async () => {
+    await delay(250)
+    const auth = requireAdmin()
+    if (auth.error) return auth.error
+    return HttpResponse.json(mockAdmins.map((a) => accountView(a, auth.user.email)))
+  }),
+
+  http.post(`${P}/admin/admins`, async ({ request }) => {
+    await delay(500)
+    const auth = requireAdmin()
+    if (auth.error) return auth.error
+    const body = (await request.json()) as { name: string; email: string }
+    const email = body.email.trim().toLowerCase()
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return err(422, 'validation', 'Revisa los campos marcados.', { fieldErrors: { email: 'Correo electrónico no válido.' } })
+    if (body.name.trim().length < 2) return err(422, 'validation', 'Revisa los campos marcados.', { fieldErrors: { name: 'Escribe el nombre.' } })
+    if (mockAdmins.some((a) => a.email === email)) return err(409, 'admin_exists', 'Ya existe un administrador con ese correo.')
+    const a: MockAdmin = {
+      id: crypto.randomUUID(),
+      email,
+      name: body.name.trim(),
+      password: null,
+      mfaMethod: 'email',
+      inviteToken: null,
+      inviteExpires: 0,
+      invitedBy: null,
+      createdAt: new Date().toISOString(),
+    }
+    mockAdmins.push(a)
+    mockInvite(a, auth.user.name)
+    return HttpResponse.json(accountView(a, auth.user.email), { status: 201 })
+  }),
+
+  http.post(`${P}/admin/admins/:id/invitation`, async ({ params }) => {
+    await delay(400)
+    const auth = requireAdmin()
+    if (auth.error) return auth.error
+    const a = mockAdmins.find((x) => x.id === params.id)
+    if (!a) return err(404, 'not_found', 'Administrador no encontrado.')
+    if (a.password) return err(409, 'already_active', 'Esa cuenta ya está activada.')
+    mockInvite(a, auth.user.name)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.delete(`${P}/admin/admins/:id`, async ({ params }) => {
+    await delay(300)
+    const auth = requireAdmin()
+    if (auth.error) return auth.error
+    const i = mockAdmins.findIndex((x) => x.id === params.id)
+    if (i < 0) return err(404, 'not_found', 'Administrador no encontrado.')
+    if (mockAdmins[i]!.email === auth.user.email) return err(409, 'self_delete', 'No puedes eliminar tu propia cuenta.')
+    mockAdmins.splice(i, 1)
     return new HttpResponse(null, { status: 204 })
   }),
 

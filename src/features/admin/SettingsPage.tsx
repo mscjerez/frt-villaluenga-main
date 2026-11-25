@@ -9,13 +9,14 @@ import { cn } from '@/lib/cn'
 import { Alert, Badge, Button, Field, Input, Panel, Spinner, Switch, Textarea } from '@/components/ui'
 import { SiteBannerView } from '@/features/public/SiteBanner'
 import { PageHeader } from './AdminLayout'
+import { AdminsPanel } from './AdminsPanel'
 import { useAdminBanner, useBlocks, useSaveBanner, useSystem } from './queries'
 
 export function SettingsPage() {
   const banner = useAdminBanner()
   return (
     <>
-      <PageHeader title="Ajustes" description="Aviso de la página principal y versiones instaladas." />
+      <PageHeader title="Ajustes" description="Aviso de la página principal, administradores y versiones instaladas." />
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         {banner.isLoading ? (
           <Spinner />
@@ -25,6 +26,9 @@ export function SettingsPage() {
           <BannerForm saved={banner.data!} />
         )}
         <Versions />
+      </div>
+      <div className="mt-6">
+        <AdminsPanel />
       </div>
     </>
   )

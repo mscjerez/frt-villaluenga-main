@@ -109,3 +109,30 @@ export const useSaveBanner = () => {
 }
 
 export const useSystem = () => useQuery({ queryKey: ['admin', 'system'], queryFn: adminApi.system, staleTime: 5 * 60_000 })
+
+export const useAdmins = () => useQuery({ queryKey: ['admin', 'admins'], queryFn: adminApi.admins })
+
+export const useInviteAdmin = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, email }: { name: string; email: string }) => adminApi.inviteAdmin(name, email),
+    // Also on error: a failed email still leaves the account created (resend from the list).
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin', 'admins'] }),
+  })
+}
+
+export const useResendInvitation = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.resendInvitation(id),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin', 'admins'] }),
+  })
+}
+
+export const useDeleteAdmin = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => adminApi.deleteAdmin(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'admins'] }),
+  })
+}
