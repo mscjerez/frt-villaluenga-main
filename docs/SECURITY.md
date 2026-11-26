@@ -44,6 +44,6 @@ Referrer-Policy: strict-origin-when-cross-origin
 Permissions-Policy: camera=(), microphone=(), geolocation=()
 ```
 
-The API is served at `https://api.mscjerez.es/v1/rcc` through the gateway in `../gateway` (Cloudflare Tunnel + Traefik on the Raspberry Pi): no open ports at home, CORS limited to the site origin, per-IP rate limits (strict on login, 2FA, booking, lookup and upload), body limits and security headers. Cookies are host-only on `api.mscjerez.es` (no `Domain`), so the WordPress site and other `*.mscjerez.es` hosts never receive them. Build the frontend with `VITE_API_URL=https://api.mscjerez.es/v1/rcc` so the CSP `connect-src` allows it.
+The API is served at `https://api.mscjerez.es/v1/rcc` through the gateway in `../../mscjerez-gateway` (Cloudflare Tunnel + Traefik on the Raspberry Pi): no open ports at home, CORS limited to the site origin, per-IP rate limits (strict on login, 2FA, booking, lookup and upload), body limits and security headers. Cookies are host-only on `api.mscjerez.es` (no `Domain`), so the WordPress site and other `*.mscjerez.es` hosts never receive them. Build the frontend with `VITE_API_URL=https://api.mscjerez.es/v1/rcc` so the CSP `connect-src` allows it.
 
 Configure the SPA fallback (`/*` → `index.html`) so deep links like `/reservas/…`, `/mi-reserva` and `/admin/…` work.

@@ -7,7 +7,7 @@ Web de reservas de la casa Rincón Cura Carlos (Villaluenga del Rosario, Cádiz)
 - **Mi reserva** (`/mi-reserva`): busca la reserva por su referencia y lleva al seguimiento.
 - **Gestión** (`/admin`): panel con tareas pendientes, listado de reservas, ciclo de estados, control de llaves, reservas gratuitas, mensajes al grupo, cierre de fechas, calendario de ocupación y finanzas.
 
-Producción: **https://rinconscout.mscjerez.es** (GitHub Pages), con la API en **https://api.mscjerez.es/v1/rcc** (Raspberry Pi, a través de la pasarela de `../gateway`). Desarrollo: http://localhost:5173.
+Producción: **https://rinconscout.mscjerez.es** (GitHub Pages), con la API en **https://api.mscjerez.es/v1/rcc** (Raspberry Pi, a través de la pasarela de `../../mscjerez-gateway`). Desarrollo: http://localhost:5173.
 
 ## Stack
 
@@ -80,7 +80,7 @@ Cada paso queda en el historial de la reserva y los cobros/devoluciones generan 
 
 1. DNS: registro `CNAME rinconscout` → el hosting de la web (para GitHub Pages, `<usuario>.github.io`) y dominio personalizado configurado en el repositorio (*Settings → Pages*). Con dominio propio, el workflow compila con `BASE_PATH=/` automáticamente.
 2. En el repositorio, *Settings → Secrets and variables → Actions → Variables*: `VITE_API_URL=https://api.mscjerez.es/v1/rcc` y `VITE_TURNSTILE_SITE_KEY` con la clave real. El workflow las usa al compilar.
-   La API pasa por la pasarela de la Raspberry Pi (Cloudflare Tunnel + Traefik), que reescribe `/v1/rcc/…` a `/api/v1/…`: el backend implementa las rutas tal cual están en [docs/API.md](docs/API.md). Instalación en `../gateway/README.md`.
+   La API pasa por la pasarela de la Raspberry Pi (Cloudflare Tunnel + Traefik), que reescribe `/v1/rcc/…` a `/api/v1/…`: el backend implementa las rutas tal cual están en [docs/API.md](docs/API.md). Instalación en `../../mscjerez-gateway/README.md`.
 3. El backend necesita la URL pública para los enlaces de los correos (`https://rinconscout.mscjerez.es/reservas/<token>`; `http://localhost:5173` en desarrollo).
 4. Cabeceras de seguridad: ver [docs/SECURITY.md](docs/SECURITY.md).
 

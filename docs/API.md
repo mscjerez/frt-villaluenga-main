@@ -1,6 +1,6 @@
 # API contract
 
-In production the browser calls **`https://api.mscjerez.es/v1/rcc/…`** (the frontend is built with `VITE_API_URL=https://api.mscjerez.es/v1/rcc`). The gateway (`../gateway`) rewrites that prefix, so **the backend serves `/api/v1/…`** exactly as written below. On localhost the same `/api/v1` path is served by the MSW mocks or proxied by Vite to a local backend (`API_PROXY_TARGET`).
+In production the browser calls **`https://api.mscjerez.es/v1/rcc/…`** (the frontend is built with `VITE_API_URL=https://api.mscjerez.es/v1/rcc`). The gateway (`../../mscjerez-gateway`) rewrites that prefix, so **the backend serves `/api/v1/…`** exactly as written below. On localhost the same `/api/v1` path is served by the MSW mocks or proxied by Vite to a local backend (`API_PROXY_TARGET`).
 
 The gateway already handles CORS (only `https://rinconscout.mscjerez.es`, with credentials), rate limits per client IP, request size limits and security headers. The backend must still validate everything and apply its own per-account limits. Client IP: `CF-Connecting-IP` (set by Cloudflare), never a value from the request body.
 
